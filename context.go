@@ -24,6 +24,9 @@ type Context struct {
 	Params map[string]string
 	// response info
 	StatusCode int
+	// middleware
+	handlers []HandlerFunc
+	index    int
 }
 
 func newContext(w http.ResponseWriter, req *http.Request) *Context {
@@ -32,6 +35,15 @@ func newContext(w http.ResponseWriter, req *http.Request) *Context {
 		Req:    req,
 		Path:   req.URL.Path,
 		Method: req.Method,
+		index:  -1,
+	}
+}
+
+func (c *Context) Next() {
+	c.index++
+	s := len(c.handlers)
+	for ; c.index < s; c.index++ {
+		c.handlers[c.index](c)
 	}
 }
 
@@ -40,7 +52,7 @@ func (c *Context) Param(key string) string {
 	return value
 }
 
-func (c *Context) PoseForm(key string) string {
+func (c *Context) PostForm(key string) string {
 	return c.Req.FormValue(key)
 }
 
@@ -70,6 +82,11 @@ func (c *Context) JSON(code int, obj interface{}) {
 	if err := encoder.Encode(obj); err != nil {
 		http.Error(c.Writer, err.Error(), http.StatusInternalServerError)
 	}
+}
+
+func (c *Context) Fail(code int, err string) {
+	c.index = len(c.handlers)
+	c.JSON(code, H{"message": err})
 }
 
 func (c *Context) Data(code int, data []byte) {
